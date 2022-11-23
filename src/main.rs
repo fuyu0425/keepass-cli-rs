@@ -95,27 +95,48 @@ fn field_name_map(name: &str) -> &str {
     }
 }
 
+fn print_otp(e: &Entry) -> Result<()> {
+    // NOTE: there are two types of otp secret in the database
+    // one is in the url (e.g. otpauth://....)
+    // another one is in the attribute "TOTP Seed"
+    if let Some(v) = e.get("otp") {
+        let otp_url = v;
+        let url = Url::parse(otp_url)?;
+        let mut pairs = url.query_pairs();
+        let map = BTreeMap::from_iter(pairs);
+        let secret = map.get("secret").ok_or(anyhow!("no secret"))?;
+        let code = TOTPBuilder::new()
+            .base32_key(&secret)
+            .finalize()
+            .unwrap()
+            .generate();
+        debug!("otp: {v} {url:#?} {map:#?} {secret} {code}");
+        print!("{code} ");
+    } else if let Some(v) = e.get("TOTP Seed") {
+        // NOTE: some secret are space separted
+        let clean: &str = &v.split_ascii_whitespace().collect::<Vec<&str>>().join("");
+        let code = TOTPBuilder::new()
+            .base32_key(&clean)
+            .finalize()
+            .unwrap()
+            .generate();
+        print!("{code} ");
+    } else {
+        print!("nil ")
+    }
+    Ok(())
+}
+
 fn print_field(e: &Entry, field: &String) -> Result<()> {
     let ff = field_name_map(field.as_str());
+    if ff == "otp" {
+        print_otp(e)?;
+        return Ok(());
+    }
     let val = e.get(ff);
     debug!("{:#?} {:#?}", field, val);
     if let Some(v) = val {
-        if ff != "otp" {
-            print!("{v} ");
-        } else {
-            let otp_url = v;
-            let url = Url::parse(otp_url)?;
-            let mut pairs = url.query_pairs();
-            let map = BTreeMap::from_iter(pairs);
-            let secret = map.get("secret").ok_or(anyhow!("no secret"))?;
-            let code = TOTPBuilder::new()
-                .base32_key(&secret)
-                .finalize()
-                .unwrap()
-                .generate();
-            debug!("otp: {v} {url:#?} {map:#?} {secret} {code}");
-            print!("{code} ");
-        }
+        print!("{v} ");
     } else {
         print!("nil ");
     }
