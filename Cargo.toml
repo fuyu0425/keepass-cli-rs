@@ -13,12 +13,19 @@ description = "Alternative CLI for Keepass"
 anyhow = "1.0.66"
 clap = { version = "4.0.26", features = ["derive"] }
 clap-verbosity-flag = "2.0.0"
-keepass = "0.4.10"
+keepass = { path = "../keepass-rs" }
+libreauth = "0.15.0"
 log = "0.4.17"
+rpassword = "7.1.0"
 rustyline = "10.0.0"
 shadow-rs = "0.17.1"
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
+url = "2.3.1"
 
 [build-dependencies]
 shadow-rs = "0.17.1"
+
+[profile.dev]
+# must specifiy this; otherwise decrypt xml takes forever
+opt-level = 3
