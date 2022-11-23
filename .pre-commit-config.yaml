@@ -1,0 +1,10 @@
+repos:
+  - repo: local
+    hooks:
+    - id: fmt
+      name: fmt
+      description: Format files with cargo fmt.
+      entry: rustfmt --quiet
+      language: rust
+      types: [rust]
+      args: ["--"]
