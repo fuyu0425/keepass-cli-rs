@@ -721,7 +721,6 @@ dependencies = [
  "keepass",
  "libreauth",
  "log",
- "once_cell",
  "rpassword",
  "rustyline",
  "shadow-rs",

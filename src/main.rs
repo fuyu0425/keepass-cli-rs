@@ -3,14 +3,8 @@
 use anyhow::{anyhow, bail, Result};
 use clap::Parser;
 use clap_verbosity_flag::Verbosity;
-use keepass::{
-    Database,
-    Entry, // Result
-    // Error,
-    NodeRef,
-};
+use keepass::{Database, Entry, NodeRef};
 use libreauth::oath::TOTPBuilder;
-use once_cell::sync::OnceCell;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 use std::char;
@@ -27,12 +21,6 @@ shadow_rs::shadow!(build);
 
 const COOKIE_PRE: char = 254 as char;
 const COOKIE_POST: char = 255 as char;
-
-pub static EMACS: OnceCell<bool> = OnceCell::new();
-
-pub fn is_emacs() -> bool {
-    *EMACS.get().unwrap()
-}
 
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about)]
@@ -205,7 +193,6 @@ fn print_entry(e: &Entry, fields: &Option<Vec<String>>, id: Option<u64>) -> Resu
         print!("Entry '{0}': '{1}' : '{2}'", title, user, pass);
     };
     ret.push(")".to_string());
-    // println!("{}", ret.join(" "));
     Ok(ret)
 }
 
@@ -266,7 +253,6 @@ impl<'a, 'b> KPClient<'a> {
         }
         output.push(')');
         output.push('\n');
-        // print!("{}", output);
         print_with_cookie(&output);
         Ok(())
     }
@@ -289,7 +275,6 @@ impl<'a, 'b> KPClient<'a> {
             output.push_str(ret.join(" ").as_str());
         }
         output.push(')');
-        // print!("{}", output);
         if show {
             output.push_str(" :show t");
         } else {
@@ -328,13 +313,9 @@ fn main() -> Result<()> {
     };
     let password = password.as_str();
     // debug!("passowrd {:#?}", password);
-    // let password = "12345678";
-    // let db = Database::open(&mut File::open(path)?, Some("12345678"), None)?;
 
     let db = Database::open(&mut File::open(path)?, Some(password), None)?;
     let mut kp_client = KPClient::new(&db)?;
-
-    EMACS.set(args.emacs).unwrap();
 
     match &args.action {
         Action::List { fields } => kp_client.do_list(fields, args.show, &args.message)?,
