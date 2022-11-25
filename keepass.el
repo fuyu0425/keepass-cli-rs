@@ -233,6 +233,8 @@ debuggable (backtrace) error."
     (keepass-log 'misc "%S" args)
     (setq keepass~all-entries nil)
     (clrhash keepass~entry-map)
+    (setq keepass-current-selected-id nil
+          keepass-current-selected nil)
     (setq keepass~proc-buf "")
     (setq keepass~proc-process (apply 'start-process
                                       keepass~proc-name keepass~proc-name
@@ -337,11 +339,12 @@ debuggable (backtrace) error."
          (description (keepass-entry-description entry))
          (has-otp (keepass-entry-has-otp entry))
          (item-str (format "Title: %s\nUsername: %s\nURL: %s\nDescription: %s\nHas-OTP: %s"
-                           title
-                           username
-                           url
+                           (propertize title 'face 'font-lock-type-face)
+                           (propertize username 'face 'font-lock-function-name-face)
+                           (propertize url 'face 'font-lock-variable-name-face)
                            description
-                           has-otp)))
+                           (propertize has-otp 'face 'font-lock-warning-face)
+                           )))
     item-str))
 
 (defun keepass-select ()
@@ -409,15 +412,16 @@ When REFRESH is non nil refresh infos from server."
     (goto-char (point-min))))
 
 (defun keepass~main-redraw-buffer ()
-  (with-current-buffer keepass-main-buffer-name
-    (let ((inhibit-read-only t)
-          (pos (point)))
-      (erase-buffer)
-      (if keepass-current-selected
-          (insert (keepass--format-entry keepass-current-selected))
-        (insert (format "No entry is selected. Please press \".\" or \"?\" to start.")))
-      (keepass-main-mode)
-      (goto-char pos))))
+  (when (bufferp keepass-main-buffer-name)
+    (with-current-buffer keepass-main-buffer-name
+      (let ((inhibit-read-only t)
+            (pos (point)))
+        (erase-buffer)
+        (if keepass-current-selected
+            (insert (keepass--format-entry keepass-current-selected))
+          (insert (format "No entry is selected. Please press \".\" or \"?\" to start.")))
+        (keepass-main-mode)
+        (goto-char pos)))))
 
 (defhydra keepass-hydra (:hint nil)
   ""
@@ -506,9 +510,8 @@ When REFRESH is non nil refresh infos from server."
 
 ;;;###autoload
 (defun keepass-inplace ()
-  "Lanuch keepass. Switch to the keepass special buffer unless
-  BACKGROUND (prefix-argument) is non-nil"
-  (interactive "")
+  "Lanuch keepass inplace."
+  (interactive)
   (keepass t))
 
 ;; TODO can we show svg icon for domain?

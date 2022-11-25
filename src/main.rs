@@ -143,7 +143,7 @@ fn print_otp(e: &Entry) -> Result<Vec<String>> {
             .generate();
         ret.push(format!("\"{}\"", code));
     } else {
-        ret.push("nil".to_string());
+        ret.push("\"None\"".to_string());
     }
     Ok(ret)
 }
@@ -157,9 +157,9 @@ fn print_field(e: &Entry, field: &String) -> Result<Vec<String>> {
     } else if ff == "has-otp" {
         let has = has_otp(&e)?;
         if has {
-            ret.push("t".to_string())
+            ret.push("\"yes\"".to_string())
         } else {
-            ret.push("nil".to_string())
+            ret.push("\"no\"".to_string())
         }
         return Ok(ret);
     }
@@ -169,7 +169,7 @@ fn print_field(e: &Entry, field: &String) -> Result<Vec<String>> {
         ret.push(format!("\"{}\"", v.to_string()));
         // ret.push(v.to_string());
     } else {
-        ret.push("nil".to_string());
+        ret.push("\"None\"".to_string());
     }
     Ok(ret)
 }
