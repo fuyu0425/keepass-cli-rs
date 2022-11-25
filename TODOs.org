@@ -1,0 +1,32 @@
+* DONE Basic CLI
+CLOSED: [2022-11-23 Wed 14:48]
+
+* DONE Server mode
+CLOSED: [2022-11-23 Wed 14:48]
+
+* TODO TOTP generation
+only some types are supported now (SHA1/6-digit code)
+
+* TODO Emacs integration
+
+** DONE hydra/transient
+CLOSED: [2022-11-25 Fri 16:03]
+
+** DONE completing-read
+CLOSED: [2022-11-25 Fri 16:03]
+use built-in completing-read
+
+** TODO SVG icon?
+
+** TODO Clear kill-ring
+
+
+* TODO Other editors
+Might need to clean some codes for other editors with different style of async
+programming.
+
+** TODO Vim integration
+Welcome for PR
+
+** TODO VSCode integration
+Welcome for PR
