@@ -1,6 +1,6 @@
 #![allow(warnings)]
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use clap::Parser;
 use clap_verbosity_flag::Verbosity;
 use keepass::{
@@ -10,8 +10,10 @@ use keepass::{
     NodeRef,
 };
 use libreauth::oath::TOTPBuilder;
+use once_cell::sync::OnceCell;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
+use std::char;
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Read;
@@ -21,10 +23,18 @@ use std::time::SystemTime;
 use tracing::{debug, info};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 use url::Url;
-
 shadow_rs::shadow!(build);
 
-#[derive(Parser, Debug)]
+const COOKIE_PRE: char = 254 as char;
+const COOKIE_POST: char = 255 as char;
+
+pub static EMACS: OnceCell<bool> = OnceCell::new();
+
+pub fn is_emacs() -> bool {
+    *EMACS.get().unwrap()
+}
+
+#[derive(Parser, Debug, Clone)]
 #[clap(author, version, about)]
 pub struct Args {
     #[command(subcommand)]
@@ -32,6 +42,18 @@ pub struct Args {
     /// emacs-friendly output
     #[clap(long = "emacs", short = 'e', default_value = "false", global = true)]
     emacs: bool,
+
+    /// show; used for callback in emacs
+    #[clap(long = "show", short = 's', default_value = "false", global = true)]
+    show: bool,
+
+    /// show; used for callback in emacs
+    #[clap(long = "meesage", short = 'm', global = true)]
+    message: Option<String>,
+
+    /// keepass database path
+    #[clap(long = "database", short = 'd')]
+    database: Option<String>,
 
     #[clap(flatten)]
     verbose: clap_verbosity_flag::Verbosity,
@@ -46,14 +68,11 @@ enum Field {
     URL,
 }
 
-#[derive(clap::Subcommand, Debug)]
+#[derive(clap::Subcommand, Debug, Clone)]
 enum Action {
     /// List All
     #[clap(alias = "ls")]
     List {
-        /// enable when creation
-        #[clap(long = "password", short = 'p', default_value = "false")]
-        show_password: bool,
         /// show fields in order
         #[clap(long = "field", short = 'f', num_args = 0..)]
         // fields: Option<Vec<Field>>,
@@ -71,6 +90,9 @@ enum Action {
     /// server mode
     #[clap(alias = "s")]
     Server,
+    /// quit server
+    #[clap(alias = "q")]
+    Quit,
 }
 
 #[derive(Debug)]
@@ -95,10 +117,21 @@ fn field_name_map(name: &str) -> &str {
     }
 }
 
-fn print_otp(e: &Entry) -> Result<()> {
+fn has_otp(e: &Entry) -> Result<bool> {
+    let mut ret = false;
+    if let Some(v) = e.get("otp") {
+        ret = true;
+    } else if let Some(v) = e.get("TOTP Seed") {
+        ret = true;
+    }
+    Ok(ret)
+}
+
+fn print_otp(e: &Entry) -> Result<Vec<String>> {
     // NOTE: there are two types of otp secret in the database
     // one is in the url (e.g. otpauth://....)
     // another one is in the attribute "TOTP Seed"
+    let mut ret: Vec<String> = vec![];
     if let Some(v) = e.get("otp") {
         let otp_url = v;
         let url = Url::parse(otp_url)?;
@@ -111,7 +144,7 @@ fn print_otp(e: &Entry) -> Result<()> {
             .unwrap()
             .generate();
         debug!("otp: {v} {url:#?} {map:#?} {secret} {code}");
-        print!("{code} ");
+        ret.push(format!("\"{}\"", code));
     } else if let Some(v) = e.get("TOTP Seed") {
         // NOTE: some secret are space separted
         let clean: &str = &v.split_ascii_whitespace().collect::<Vec<&str>>().join("");
@@ -120,38 +153,50 @@ fn print_otp(e: &Entry) -> Result<()> {
             .finalize()
             .unwrap()
             .generate();
-        print!("{code} ");
+        ret.push(format!("\"{}\"", code));
     } else {
-        print!("nil ")
+        ret.push("nil".to_string());
     }
-    Ok(())
+    Ok(ret)
 }
 
-fn print_field(e: &Entry, field: &String) -> Result<()> {
+fn print_field(e: &Entry, field: &String) -> Result<Vec<String>> {
+    let mut ret: Vec<String> = vec![];
     let ff = field_name_map(field.as_str());
     if ff == "otp" {
-        print_otp(e)?;
-        return Ok(());
+        ret.append(&mut print_otp(e)?);
+        return Ok(ret);
+    } else if ff == "has-otp" {
+        let has = has_otp(&e)?;
+        if has {
+            ret.push("t".to_string())
+        } else {
+            ret.push("nil".to_string())
+        }
+        return Ok(ret);
     }
     let val = e.get(ff);
     debug!("{:#?} {:#?}", field, val);
     if let Some(v) = val {
-        print!("{v} ");
+        ret.push(format!("\"{}\"", v.to_string()));
+        // ret.push(v.to_string());
     } else {
-        print!("nil ");
+        ret.push("nil".to_string());
     }
-    Ok(())
+    Ok(ret)
 }
 
-fn print_entry(e: &Entry, fields: &Option<Vec<String>>, id: Option<u64>) -> Result<()> {
+fn print_entry(e: &Entry, fields: &Option<Vec<String>>, id: Option<u64>) -> Result<Vec<String>> {
+    let mut ret: Vec<String> = vec![];
     debug!("{:#?}", &e);
+    ret.push("(".to_string());
     if let Some(id) = id {
-        print!("{id} ");
+        ret.push(id.to_string());
     }
 
     if let Some(fs) = fields.as_ref() {
         for f in fs.iter() {
-            print_field(e, f)?;
+            ret.append(&mut print_field(e, f)?);
         }
     } else {
         let title = e.get_title().unwrap();
@@ -159,8 +204,15 @@ fn print_entry(e: &Entry, fields: &Option<Vec<String>>, id: Option<u64>) -> Resu
         let pass = e.get_password().unwrap();
         print!("Entry '{0}': '{1}' : '{2}'", title, user, pass);
     };
-    println!("");
-    Ok(())
+    ret.push(")".to_string());
+    // println!("{}", ret.join(" "));
+    Ok(ret)
+}
+
+fn print_with_cookie(s: &String) {
+    // NOTE: newline is already in s
+    let len = s.len();
+    print!("{}{:x}{}{}", COOKIE_PRE, len, COOKIE_POST, s);
 }
 
 impl<'a, 'b> KPClient<'a> {
@@ -182,20 +234,73 @@ impl<'a, 'b> KPClient<'a> {
         Ok(Self { db, id_map })
     }
 
-    pub fn do_list(&'a self, fields: &Option<Vec<String>>) -> Result<()> {
+    pub fn do_list(
+        &'a self,
+        fields: &Option<Vec<String>>,
+        show: bool,
+        msg: &Option<String>,
+    ) -> Result<()> {
+        let mut output = String::new();
+        output.push('(');
+        output.push_str(":list ");
+        output.push('(');
+        let mut first = true;
         for (k, v) in self.id_map.iter() {
+            if !first {
+                // output.push('\n');
+                output.push(' ');
+            }
             debug!("{} {:#?}", k, v);
-            print_entry(v, fields, Some(*k));
+            let ret = print_entry(v, fields, Some(*k))?;
+            output.push_str(ret.join(" ").as_str());
+            first = false;
         }
+        output.push(')');
+        if show {
+            output.push_str(" :show t");
+        } else {
+            output.push_str(" :show nil");
+        }
+        if let Some(msg) = msg.as_ref() {
+            output.push_str(format!(" :message \"{}\"", &msg).as_str());
+        }
+        output.push(')');
+        output.push('\n');
+        // print!("{}", output);
+        print_with_cookie(&output);
         Ok(())
     }
 
-    pub fn do_get(&'a self, id: u64, fields: &Option<Vec<String>>) -> Result<()> {
+    pub fn do_get(
+        &'a self,
+        id: u64,
+        fields: &Option<Vec<String>>,
+        show: bool,
+        msg: &Option<String>,
+    ) -> Result<()> {
+        let mut output = String::new();
+        output.push('(');
+        output.push_str(":get ");
+        output.push('(');
         let entry = self.id_map.get(&id);
         if let Some(e) = entry {
             debug!("{:#?}", e);
-            print_entry(e, fields, None);
+            let ret = print_entry(e, fields, None)?;
+            output.push_str(ret.join(" ").as_str());
         }
+        output.push(')');
+        // print!("{}", output);
+        if show {
+            output.push_str(" :show t");
+        } else {
+            output.push_str(" :show nil");
+        }
+        if let Some(msg) = msg.as_ref() {
+            output.push_str(format!(" :message \"{}\"", &msg).as_str());
+        }
+        output.push(')');
+        output.push('\n');
+        print_with_cookie(&output);
         Ok(())
     }
 }
@@ -206,42 +311,59 @@ fn main() -> Result<()> {
     tracing_subscriber::registry()
         .with(fmt::layer().with_filter(convert_filter(args.verbose.log_level_filter())))
         .init();
+
+    if args.database.is_none() {
+        bail!("Please specifiy database file through --database or -d")
+    }
+
     // Open KeePass database
-    let path = std::path::Path::new("/Users/fuyu0425/keepass/fast.kdbx");
-    // let password =
-    //     rpassword::prompt_password("Password (or blank for none): ").expect("Read password");
-    let password = "12345678";
+    let binding = args.database.unwrap();
+    let path = std::path::Path::new(&binding);
+    let password = if !args.emacs {
+        rpassword::prompt_password("Password (or blank for none): ").expect("Read password")
+    } else {
+        let mut t = String::new();
+        io::stdin().read_line(&mut t);
+        t.trim_end().to_string()
+    };
+    let password = password.as_str();
+    // debug!("passowrd {:#?}", password);
+    // let password = "12345678";
     // let db = Database::open(&mut File::open(path)?, Some("12345678"), None)?;
 
     let db = Database::open(&mut File::open(path)?, Some(password), None)?;
     let mut kp_client = KPClient::new(&db)?;
+
+    EMACS.set(args.emacs).unwrap();
+
     match &args.action {
-        Action::List {
-            show_password,
-            fields,
-        } => kp_client.do_list(fields)?,
-        Action::Get { id, fields } => kp_client.do_get(*id, fields)?,
+        Action::List { fields } => kp_client.do_list(fields, args.show, &args.message)?,
+        Action::Get { id, fields } => kp_client.do_get(*id, fields, args.show, &args.message)?,
         Action::Server => {
             let mut rl = Editor::<()>::new()?;
             loop {
-                let readline = rl.readline(">> ");
+                let readline = rl.readline(if !&args.emacs { ">> " } else { "" });
                 match readline {
                     Ok(line) => {
-                        // rl.add_history_entry(line.as_str());
-                        let mut _v_args_line: Vec<&str> = line.trim().split(' ').collect();
+                        rl.add_history_entry(line.as_str());
+                        let mut _v_args_line: Vec<String> = shellwords::split(&line)?;
                         debug!("{:#?}", &_v_args_line);
-                        let mut v_args_line = vec![" "];
+                        let mut v_args_line = vec![" ".to_string()];
                         v_args_line.append(&mut _v_args_line);
                         let args_line = Args::try_parse_from(&v_args_line)?;
                         debug!("{:#?}", &args_line);
                         match &args_line.action {
-                            Action::List {
-                                show_password,
-                                fields,
-                            } => kp_client.do_list(fields)?,
-                            Action::Get { id, fields } => kp_client.do_get(*id, fields)?,
+                            Action::List { fields } => {
+                                kp_client.do_list(fields, args_line.show, &args_line.message)?
+                            }
+                            Action::Get { id, fields } => {
+                                kp_client.do_get(*id, fields, args_line.show, &args_line.message)?
+                            }
                             Action::Server => {
                                 println!("cannot call server in server")
+                            }
+                            Action::Quit => {
+                                break;
                             }
                             _ => todo!(),
                         }
