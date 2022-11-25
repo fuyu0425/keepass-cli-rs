@@ -1,6 +1,21 @@
 #+TITLE: KeePass CLI with Emacs Integration
 #+AUTHOR: yufu
 
+* Why KeePass
+- I don't want to pay for password managers anymore. Especially most of them are subscription-based.
+- GNU Pass is good, but it's hard to interact with it outside of terminal.
+
+* Why New CLI
+- UI/UX of =keepassxc-cli= is not friendly.
+  - =keepassxc-cli= can only list the title of entry. However, only showing the title might not be enough in some cases. Even worse, there might be entries with the exact same title.
+- For *every single* operation, you need to type the master password, which is tedious.
+- Above reasons make it really difficult to develop a good Emacs package to retrieve passwords.
+
+
+* Feature
+- List the entries with user-specified fields =keepass-cli -d <DATABSE> ls -f title username=
+- Server mode =keepass-cli -d <DATABASE> server --emacs=
+
 * Goal
 
 
@@ -23,11 +38,15 @@
 #+end_src
 There are two functions: =keepass= and =keepass-inplace=.
 =keepass= will switch to a special buffer =keepass:main=.
-=keepass-inline= will not.
+=keepass-inplace= will not.
 
+
+* Contribution
+I have listed some TODOs in =TODOs.org=.
+Welcome PR and discussion.
 
 * Credit
 - [[https://github.com/djcb/mu][mu/mu4e code base]]
-  - idiom way to interactive asynchronous processes.
+  - idiom way to interact with asynchronous processes.
 - [[https://github.com/ifosch/keepass-mode][keepass-mode]]
 - [[https://gitlab.com/tay-dev/keepass.el][keepass.el]]

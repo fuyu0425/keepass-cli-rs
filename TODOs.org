@@ -4,7 +4,10 @@ CLOSED: [2022-11-23 Wed 14:48]
 * DONE Server mode
 CLOSED: [2022-11-23 Wed 14:48]
 
-** TODO Key file
+* TODO Key file
+
+* TODO modify database
+Can be a proxy to call =keepassxc-cli= by the provided password.
 
 * TODO TOTP generation
 only some types are supported now (SHA1/6-digit code)
@@ -19,6 +22,7 @@ CLOSED: [2022-11-25 Fri 16:03]
 use built-in completing-read
 
 ** TODO SVG icon?
+Is it possible to render SVG icons in =completing-read= buffer?
 
 ** TODO Clear kill-ring
 
