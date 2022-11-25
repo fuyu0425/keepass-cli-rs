@@ -218,7 +218,7 @@ debuggable (backtrace) error."
 
   (unless (and keepass-database (file-exists-p keepass-database))
     (keepass-error
-     "Cannot find keepass, please set `keepass-database' to the keepass database path"))
+     "Cannot find keepass database, please set `keepass-database' to the keepass database path"))
 
   (let* ((process-connection-type nil) ;; use a pipe
          (args nil)
@@ -301,14 +301,14 @@ debuggable (backtrace) error."
 
 ;; TODO: call server to reload database
 (defun keepass-refresh ()
-"Refresh the entries."
+  "Refresh the entries."
   (interactive)
   (setq keepass~all-entries nil)
   (clrhash keepass~entry-map)
   (keepass-list))
 
 (defun keepass-list ()
-"List all entries and cache them in `keepass~all-entries'"
+  "List all entries and cache them in `keepass~all-entries'"
   (interactive)
   (unless keepass~all-entries (keepass~call "ls -f title username url description has-otp")))
 
@@ -345,7 +345,7 @@ debuggable (backtrace) error."
     item-str))
 
 (defun keepass-select ()
-"Select entry based on completing-read."
+  "Select entry based on completing-read."
   (interactive)
   (let* ((objects nil))
     (dolist (entry keepass~all-entries)
@@ -376,7 +376,7 @@ debuggable (backtrace) error."
       (keepass~main-redraw-buffer))))
 
 (defun keepass-select-by-title (selected-title)
-"Select entry based on its title.
+  "Select entry based on its title.
 If there are two entries sharing the same title, the first one is returned."
   (interactive)
   (let* ((objects nil))
@@ -414,7 +414,7 @@ When REFRESH is non nil refresh infos from server."
           (pos (point)))
       (erase-buffer)
       (if keepass-current-selected
-        (insert (keepass--format-entry keepass-current-selected))
+          (insert (keepass--format-entry keepass-current-selected))
         (insert (format "No entry is selected. Please press \".\" or \"?\" to start.")))
       (keepass-main-mode)
       (goto-char pos))))
@@ -455,7 +455,7 @@ When REFRESH is non nil refresh infos from server."
 
 ;;;###autoload
 (defmacro keepass-make-hydra-favorite (&rest heads)
-"API looks like this
+  "API looks like this
 (keepass-make-hydra-favorite
  (\"g\" \"gatech\")  ;; key, title pair
  (\"f\" \"ffxiv\"))"
