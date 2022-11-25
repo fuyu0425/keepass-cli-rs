@@ -241,7 +241,6 @@ debuggable (backtrace) error."
     (unless keepass~proc-process
       (keepass-error "Failed to start the keepass backend"))
     ;; NOTE: authentication
-    ;; (password-cache-add ,db ,master-pass)
     (process-send-string keepass~proc-process db-pw)
     (process-send-string keepass~proc-process "\n")
     (password-cache-add keepass-database db-pw)

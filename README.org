@@ -1,0 +1,33 @@
+#+TITLE: KeePass CLI with Emacs Integration
+#+AUTHOR: yufu
+
+* Goal
+
+
+* Installation
+** CLI binary
+#+begin_src shell
+  cargo install --path .
+#+end_src
+** Emacs integration
+#+begin_src emacs-lisp
+  (add-to-list 'load-path "/Users/fuyu0425/project/github/keepass-cli-rs/")
+  (require 'keepass)
+  (setq keepass-database "/Users/fuyu0425/keepass/keepass.kdbx")
+  (keepass-make-hydra-favorite
+   ("t" "test")
+   ("o" "totp seed"))
+  ;; for spacemacs with SPC a k
+  (spacemacs/set-leader-keys
+    "ak" 'keepass-inplace)
+#+end_src
+There are two functions: =keepass= and =keepass-inplace=.
+=keepass= will switch to a special buffer =keepass:main=.
+=keepass-inline= will not.
+
+
+* Credit
+- [[https://github.com/djcb/mu][mu/mu4e code base]]
+  - idiom way to interactive asynchronous processes.
+- [[https://github.com/ifosch/keepass-mode][keepass-mode]]
+- [[https://gitlab.com/tay-dev/keepass.el][keepass.el]]
