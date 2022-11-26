@@ -722,6 +722,7 @@ name = "keepass-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "atty",
  "clap",
  "clap-verbosity-flag",
  "keepass",

@@ -434,7 +434,7 @@ fn main() -> Result<()> {
     // Open KeePass database
     let binding = args.database.unwrap();
     let path = std::path::Path::new(&binding);
-    let password = if !args.emacs {
+    let password = if atty::is(atty::Stream::Stdout) && atty::is(atty::Stream::Stdin) {
         rpassword::prompt_password("Password (or blank for none): ").expect("Read password")
     } else {
         let mut t = String::new();

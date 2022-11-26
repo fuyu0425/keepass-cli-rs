@@ -11,6 +11,7 @@ description = "Alternative CLI for KeePass with Emacs integration"
 
 [dependencies]
 anyhow = "1.0.66"
+atty = "0.2.14"
 clap = { version = "4.0.26", features = ["derive"] }
 clap-verbosity-flag = "2.0.0"
 keepass = { path = "../keepass-rs" }
