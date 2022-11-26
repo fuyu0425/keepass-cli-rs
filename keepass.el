@@ -317,9 +317,11 @@ debuggable (backtrace) error."
 
 (defun keepass--get (id field &optional show)
   ;; (unless keepass~all-entries (keepass-list))
+  ;; TODO should we handle otp remaining time here?
   (let* ((cmd (format "get %d -f %s" id field))
          (cmd  (if show (format "%s -s" cmd) cmd))
-         (cmd  (if show (format "%s -m \"%s is copied\"" cmd field) cmd)))
+         (msg (format "%s is copied" field))
+         (cmd  (if show (format "%s -m \"%s\"" cmd msg) cmd)))
     (keepass~call cmd)))
 
 
