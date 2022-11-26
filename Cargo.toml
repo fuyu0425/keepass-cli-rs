@@ -14,6 +14,7 @@ anyhow = "1.0.66"
 clap = { version = "4.0.26", features = ["derive"] }
 clap-verbosity-flag = "2.0.0"
 keepass = { path = "../keepass-rs" }
+lexpr = "0.2.6"
 libreauth = "0.15.0"
 log = "0.4.17"
 rpassword = "7.1.0"
