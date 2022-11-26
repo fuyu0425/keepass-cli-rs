@@ -88,18 +88,120 @@ pub enum Field {
     Description(String),
     Url(String),
     Otp(String),
-    HasOtp(bool),
+    Unimplemented,
 }
 
-#[derive(Debug)]
+impl Field {
+    pub fn index(&self) -> String {
+        match self {
+            Self::Username(_) => "username",
+            Self::Password(_) => "password",
+            Self::Title(_) => "title",
+            Self::Description(_) => "description",
+            Self::Url(_) => "url",
+            Self::Otp(_) => "otp",
+            Self::Unimplemented => todo!(),
+        }
+        .to_string()
+    }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            Self::Username(v) => v,
+            Self::Password(v) => v,
+            Self::Title(v) => v,
+            Self::Description(v) => v,
+            Self::Url(v) => v,
+            Self::Otp(v) => v,
+            Self::Unimplemented => todo!(),
+        }
+        .to_string()
+    }
+}
+
+#[derive(Debug, Default)]
 pub struct ParsedEntry {
-    pub fields: Vec<Field>,
+    pub fields: BTreeMap<String, Field>,
+    pub has_otp: bool,
 }
 
 impl ParsedEntry {
     pub fn to_emacs(&self) -> Result<String> {
         let mut ret = String::new();
         Ok(ret)
+    }
+    pub fn get_otp_code(&self) -> Result<String> {
+        let secret = self
+            .fields
+            .get(&"otp".to_string())
+            .ok_or(anyhow!("otp not found"))?;
+        let code = TOTPBuilder::new()
+            .base32_key(&secret.to_string())
+            .finalize()
+            .unwrap()
+            .generate();
+        Ok(code)
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct Response {
+    pub entries: Vec<ParsedEntry>,
+    pub show: bool,
+    pub copy: bool,
+    pub message: String,
+    pub otp_expire: Option<u64>,
+}
+
+impl Response {
+    pub fn to_emacs(&self) -> Result<String> {
+        let mut ret = String::new();
+        Ok(ret)
+    }
+}
+
+impl TryFrom<&Entry> for ParsedEntry {
+    type Error = anyhow::Error;
+    fn try_from(e: &Entry) -> Result<Self> {
+        let mut fields: BTreeMap<String, Field> = BTreeMap::new();
+        let mut has_otp = false;
+        for key in e.fields.keys() {
+            let f = match key.as_str() {
+                "Title" => Field::Title(e.get_title().unwrap().to_string()),
+                "UserName" => Field::Username(e.get_username().unwrap().to_string()),
+                "Password" => Field::Password(e.get_password().unwrap().to_string()),
+                "Description" => Field::Description(e.get("Description").unwrap().to_string()),
+                "URL" => Field::Url(e.get("URL").unwrap().to_string()),
+                "otp" => {
+                    has_otp = true;
+                    let otp_url = e.get("otp").unwrap();
+                    let secret = otp_url_to_secret(otp_url)?;
+                    Field::Otp(secret)
+                }
+                "TOTP Seed" => {
+                    has_otp = true;
+                    let otp_seed = e.get("TOTP Seed").unwrap();
+                    let secret = otp_seed_to_secret(otp_seed)?;
+                    Field::Otp(secret)
+                }
+                _ => Field::Unimplemented,
+            };
+            if !matches!(f, Field::Unimplemented) {
+                fields.insert(f.index(), f);
+            }
+        }
+        Ok(Self { fields, has_otp })
+    }
+}
+
+impl TryFrom<&Entry> for Response {
+    type Error = anyhow::Error;
+    fn try_from(e: &Entry) -> Result<Self> {
+        let parsed_entry = ParsedEntry::try_from(e)?;
+        Ok(Self {
+            entries: vec![parsed_entry],
+            ..Default::default()
+        })
     }
 }
 
@@ -129,6 +231,22 @@ fn has_otp(e: &Entry) -> Result<bool> {
     Ok(ret)
 }
 
+fn otp_url_to_secret(otp_url: &str) -> Result<String> {
+    let url = Url::parse(otp_url)?;
+    let mut pairs = url.query_pairs();
+    let map = BTreeMap::from_iter(pairs);
+    let secret = map.get("secret").ok_or(anyhow!("no secret"))?;
+    Ok(secret.to_string())
+}
+
+fn otp_seed_to_secret(otp_seed: &str) -> Result<String> {
+    let secret: &str = &otp_seed
+        .split_ascii_whitespace()
+        .collect::<Vec<&str>>()
+        .join("");
+    Ok(secret.to_string())
+}
+
 fn print_otp(e: &Entry) -> Result<Vec<String>> {
     // NOTE: there are two types of otp secret in the database
     // one is in the url (e.g. otpauth://....)
@@ -136,22 +254,20 @@ fn print_otp(e: &Entry) -> Result<Vec<String>> {
     let mut ret: Vec<String> = vec![];
     if let Some(v) = e.get("otp") {
         let otp_url = v;
-        let url = Url::parse(otp_url)?;
-        let mut pairs = url.query_pairs();
-        let map = BTreeMap::from_iter(pairs);
-        let secret = map.get("secret").ok_or(anyhow!("no secret"))?;
+        let secret = otp_url_to_secret(otp_url)?;
         let code = TOTPBuilder::new()
             .base32_key(&secret)
             .finalize()
             .unwrap()
             .generate();
-        debug!("otp: {v} {url:#?} {map:#?} {secret} {code}");
+        debug!("otp: {v} {secret} {code}");
         ret.push(format!("\"{}\"", code));
     } else if let Some(v) = e.get("TOTP Seed") {
         // NOTE: some secret are space separted
-        let clean: &str = &v.split_ascii_whitespace().collect::<Vec<&str>>().join("");
+        // let clean: &str = &v.split_ascii_whitespace().collect::<Vec<&str>>().join("");
+        let secret = otp_seed_to_secret(v)?;
         let code = TOTPBuilder::new()
-            .base32_key(&clean)
+            .base32_key(&secret)
             .finalize()
             .unwrap()
             .generate();
