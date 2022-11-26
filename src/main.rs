@@ -3,6 +3,7 @@
 use anyhow::{anyhow, bail, Result};
 use clap::Parser;
 use clap_verbosity_flag::Verbosity;
+use is_terminal::IsTerminal;
 use keepass::{Database, Entry, NodeRef};
 use libreauth::oath::TOTPBuilder;
 use rustyline::error::ReadlineError;
@@ -434,7 +435,7 @@ fn main() -> Result<()> {
     // Open KeePass database
     let binding = args.database.unwrap();
     let path = std::path::Path::new(&binding);
-    let password = if atty::is(atty::Stream::Stdout) && atty::is(atty::Stream::Stdin) {
+    let password = if std::io::stdin().is_terminal() && std::io::stdout().is_terminal() {
         rpassword::prompt_password("Password (or blank for none): ").expect("Read password")
     } else {
         let mut t = String::new();
