@@ -47,15 +47,6 @@ pub struct Args {
     verbose: clap_verbosity_flag::Verbosity,
 }
 
-#[derive(Debug, Clone, clap::ValueEnum)]
-enum Field {
-    Username,
-    Password,
-    Title,
-    Description,
-    URL,
-}
-
 #[derive(clap::Subcommand, Debug, Clone)]
 enum Action {
     /// List All
@@ -87,6 +78,29 @@ enum Action {
 pub struct KPClient<'a> {
     db: &'a Database,
     id_map: BTreeMap<u64, &'a Entry>,
+}
+
+#[derive(Debug, Clone)]
+pub enum Field {
+    Username(String),
+    Password(String),
+    Title(String),
+    Description(String),
+    Url(String),
+    Otp(String),
+    HasOtp(bool),
+}
+
+#[derive(Debug)]
+pub struct ParsedEntry {
+    pub fields: Vec<Field>,
+}
+
+impl ParsedEntry {
+    pub fn to_emacs(&self) -> Result<String> {
+        let mut ret = String::new();
+        Ok(ret)
+    }
 }
 
 fn field_name_map(name: &str) -> &str {
