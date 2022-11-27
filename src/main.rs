@@ -184,6 +184,7 @@ pub struct Response {
     pub copy: bool,
     pub message: Option<String>,
     pub otp_expire: Option<u64>,
+    pub server_message: Option<String>,
 }
 
 impl Response {
@@ -203,6 +204,8 @@ impl Response {
         }
         let mut retv: Vec<Value> = vec![];
         retv.push(Value::keyword(self.ty.to_string()));
+        retv.push(Value::Bool(true));
+        retv.push(Value::keyword("data"));
         retv.push(Value::list(value_entries));
         retv.push(Value::keyword("show"));
         retv.push(Value::Bool(self.show));
@@ -211,6 +214,10 @@ impl Response {
         if let Some(msg) = &self.message {
             retv.push(Value::keyword("msg"));
             retv.push(Value::string(msg.to_string()));
+        }
+        if let Some(server_msg) = &self.server_message {
+            retv.push(Value::keyword("server-msg"));
+            retv.push(Value::string(server_msg.to_string()));
         }
         Ok(Value::list(retv))
     }
@@ -463,6 +470,18 @@ impl<'a, 'b> KPClient<'a> {
         if let Some(e) = entry {
             res.add_entry(*e, id);
         }
+        if let Some(fields) = fields {
+            if (fields.contains(&"otp".to_string())) {
+                let timestamp = SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs() as i64;
+                let remaining_time = 30 - (timestamp % 30);
+                res.otp_expire = Some(remaining_time as u64);
+                res.server_message =
+                    Some(format!("OTP expires in {} seconds.", remaining_time).to_string());
+            }
+        }
         print!("{}", res.to_emacs(fields)?);
         Ok(())
     }
@@ -484,25 +503,6 @@ fn main() -> Result<()> {
         .init();
 
     debug!("args {:#?}", args);
-    let t = "123";
-    let sym = Value::symbol(t);
-    let kw = Value::keyword(t);
-    let test = Value::list(vec!["1", "2", "3"]);
-    debug!(
-        "{:#?} {:#?}",
-        sym,
-        lexpr::to_string_custom(&sym, print::Options::elisp())
-    );
-    debug!(
-        "{:#?} {:#?}",
-        kw,
-        lexpr::to_string_custom(&kw, print::Options::elisp())
-    );
-    debug!(
-        "{:#?} {:#?}",
-        test,
-        lexpr::to_string_custom(&test, print::Options::elisp())
-    );
 
     if args.database.is_none() {
         bail!("Please specifiy database file through --database or -d")

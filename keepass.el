@@ -107,18 +107,10 @@ removed."
         (cond
 
          ((plist-get sexp :list)
-          (funcall 'keepass~list-callback
-                   (plist-get sexp :list)
-                   (plist-get sexp :show)
-                   (plist-get sexp :copy)
-                   (plist-get sexp :message)))
+          (keepass~list-callback sexp))
 
          ((plist-get sexp :get)
-          (funcall 'keepass~get-callback
-                   (plist-get sexp :get)
-                   (plist-get sexp :show)
-                   (plist-get sexp :copy)
-                   (plist-get sexp :message)))
+          (keepass~get-callback sexp))
 
          (t (message "Unexpected data from server [%S]" sexp)))
 
@@ -291,23 +283,32 @@ debuggable (backtrace) error."
     (keepass-log 'to-server "%s" cmd)
     (process-send-string keepass~proc-process (concat cmd "\n"))))
 
-(defun keepass~list-callback (data show copy msg)
-  (keepass-log 'misc "get callback %S with show %S" data show)
-  (dolist (entry data)
-    (let* ((fields entry)
-           (fields-with-key (-interleave '(:id :title :username :url :note :has-otp) fields))
-           (m (apply 'make-keepass-entry fields-with-key)))
-      (push m keepass~all-entries)
-      (puthash (keepass-entry-id m) m keepass~entry-map))))
-
-(defun keepass~get-callback (data show copy msg)
-  (keepass-log 'misc "get callback %S with show %S" data show)
-  (let* ((d (car data))
-         (val (car d)))
-    (keepass-log 'misc "val is %S" val)
+(defun keepass~list-callback (sexp)
+  (let* ((data (plist-get sexp :data))
+         (show (plist-get sexp :show))
+         (copy (plist-get sexp :copy))
+         (msg (plist-get sexp :msg))
+         (server-msg (plist-get sexp :server-msg)))
+    (dolist (entry data)
+      (let* ((fields entry)
+             (fields-with-key (-interleave '(:id :title :username :url :note :has-otp) fields))
+             (m (apply 'make-keepass-entry fields-with-key)))
+        (push m keepass~all-entries)
+        (puthash (keepass-entry-id m) m keepass~entry-map)))
     (when show
-      (when msg (message "%s" msg))
-      )
+      (when (or msg server-msg)
+        (message "%s %s" (or msg "") (or server-msg ""))))))
+
+(defun keepass~get-callback (sexp)
+  (let* ((data (plist-get sexp :data))
+         (show (plist-get sexp :show))
+         (copy (plist-get sexp :copy))
+         (msg (plist-get sexp :msg))
+         (server-msg (plist-get sexp :server-msg))
+         (val (caar data)))
+    (when show
+      (when (or msg server-msg)
+        (message "%s %s" (or msg "") (or server-msg ""))))
     (when copy
       (kill-new val))))
 
@@ -327,11 +328,10 @@ debuggable (backtrace) error."
 
 (defun keepass--get (id field &optional show copy)
   ;; (unless keepass~all-entries (keepass-list))
-  ;; TODO should we handle otp remaining time here?
   (let* ((cmd (format "get %d -f %s" id field))
          (cmd  (if show (format "%s -s" cmd) cmd))
          (cmd  (if copy (format "%s -c" cmd) cmd))
-         (msg (format "%s is copied" field))
+         (msg (format "%s is copied." field))
          (cmd  (if show (format "%s -m \"%s\"" cmd msg) cmd)))
     (keepass~call cmd)))
 
@@ -364,6 +364,7 @@ debuggable (backtrace) error."
   "Select entry based on completing-read."
   (interactive)
   (unless keepass~all-entries
+    (message "Loading entries; try later")
     (cl-return-from keepass-select))
   (let* ((objects nil))
     (dolist (entry keepass~all-entries)
@@ -398,6 +399,7 @@ debuggable (backtrace) error."
 If there are two entries sharing the same title, the first one is returned."
   (interactive)
   (unless keepass~all-entries
+    (message "Loading entries; try later")
     (cl-return-from keepass-select-by-title))
   (let* ((objects nil))
     (dolist (entry keepass~all-entries)
@@ -445,9 +447,9 @@ When REFRESH is non nil refresh infos from server."
   ("s" keepass-select "select entry")
   ("f" keepass-hydra-favorite/body "favorites" :exit t)
   ("r" keepass-refresh "refresh")
-  ("u" (lambda () (interactive) (keepass-get "username" t)) "copy username")
-  ("p" (lambda () (interactive) (keepass-get "password" t)) "copy password")
-  ("o" (lambda () (interactive) (keepass-get "otp" t)) "copy otp")
+  ("u" (lambda () (interactive) (keepass-get "username" t t)) "copy username")
+  ("p" (lambda () (interactive) (keepass-get "password" t t)) "copy password")
+  ("o" (lambda () (interactive) (keepass-get "otp" t t)) "copy otp")
   ("q" (lambda () (interactive)
          (when (string-equal (buffer-name) keepass-main-buffer-name)
            (quit-window)))
