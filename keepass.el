@@ -23,7 +23,7 @@
   "Face for title."
   :group 'keepass-faces)
 
-(cl-defstruct keepass-entry "Keepass Entry without password" id title username url description has-otp)
+(cl-defstruct keepass-entry "Keepass Entry without password" id title username url note has-otp)
 
 (defvar keepass~all-entries nil "All entries (served as a cache)")
 
@@ -58,6 +58,12 @@ with SPC and therefore is not visible in buffer list.")
 
 (defvar keepass~proc-process nil
   "The keepass-cli process.")
+
+(defconst keepass~loading-message "Loading...")
+
+(defun keepass-toggle-debug ()
+  (interactive)
+  (setq keepass-debug (not keepass-debug)))
 
 (defsubst keepass~proc-eat-sexp-from-buf ()
   "'Eat' the next s-expression from `keepass~proc-buf'.
@@ -104,12 +110,14 @@ removed."
           (funcall 'keepass~list-callback
                    (plist-get sexp :list)
                    (plist-get sexp :show)
+                   (plist-get sexp :copy)
                    (plist-get sexp :message)))
 
          ((plist-get sexp :get)
           (funcall 'keepass~get-callback
                    (plist-get sexp :get)
                    (plist-get sexp :show)
+                   (plist-get sexp :copy)
                    (plist-get sexp :message)))
 
          (t (message "Unexpected data from server [%S]" sexp)))
@@ -283,23 +291,25 @@ debuggable (backtrace) error."
     (keepass-log 'to-server "%s" cmd)
     (process-send-string keepass~proc-process (concat cmd "\n"))))
 
-(defun keepass~list-callback (data show msg)
+(defun keepass~list-callback (data show copy msg)
   (keepass-log 'misc "get callback %S with show %S" data show)
   (dolist (entry data)
     (let* ((fields entry)
-           (fields-with-key (-interleave '(:id :title :username :url :description :has-otp) fields))
+           (fields-with-key (-interleave '(:id :title :username :url :note :has-otp) fields))
            (m (apply 'make-keepass-entry fields-with-key)))
       (push m keepass~all-entries)
       (puthash (keepass-entry-id m) m keepass~entry-map))))
 
-(defun keepass~get-callback (data show msg)
+(defun keepass~get-callback (data show copy msg)
   (keepass-log 'misc "get callback %S with show %S" data show)
   (let* ((d (car data))
          (val (car d)))
     (keepass-log 'misc "val is %S" val)
     (when show
-      (kill-new val)
-      (when msg (message "%s" msg)))))
+      (when msg (message "%s" msg))
+      )
+    (when copy
+      (kill-new val))))
 
 ;; TODO: call server to reload database
 (defun keepass-refresh ()
@@ -312,14 +322,15 @@ debuggable (backtrace) error."
 (defun keepass-list ()
   "List all entries and cache them in `keepass~all-entries'"
   (interactive)
-  (unless keepass~all-entries (keepass~call "ls -f title username url description has-otp")))
+  (unless keepass~all-entries (keepass~call "ls -f id title username url note has-otp")))
 
 
-(defun keepass--get (id field &optional show)
+(defun keepass--get (id field &optional show copy)
   ;; (unless keepass~all-entries (keepass-list))
   ;; TODO should we handle otp remaining time here?
   (let* ((cmd (format "get %d -f %s" id field))
          (cmd  (if show (format "%s -s" cmd) cmd))
+         (cmd  (if copy (format "%s -c" cmd) cmd))
          (msg (format "%s is copied" field))
          (cmd  (if show (format "%s -m \"%s\"" cmd msg) cmd)))
     (keepass~call cmd)))
@@ -328,9 +339,9 @@ debuggable (backtrace) error."
 (defvar keepass-current-selected-id nil)
 (defvar keepass-current-selected nil)
 
-(defun keepass-get (field &optional show)
+(defun keepass-get (field &optional show copy)
   (interactive)
-  (keepass--get keepass-current-selected-id field show))
+  (keepass--get keepass-current-selected-id field show copy))
 
 (defun keepass--format-entry (entry)
   (let* (
@@ -338,20 +349,22 @@ debuggable (backtrace) error."
          (title (keepass-entry-title entry))
          (username (keepass-entry-username entry))
          (url (keepass-entry-url entry))
-         (description (keepass-entry-description entry))
+         (note (keepass-entry-note entry))
          (has-otp (keepass-entry-has-otp entry))
-         (item-str (format "Title: %s\nUsername: %s\nURL: %s\nDescription: %s\nHas-OTP: %s"
+         (item-str (format "Title: %s\nUsername: %s\nURL: %s\nNote: %s\nHas-OTP: %s"
                            (propertize title 'face 'font-lock-type-face)
                            (propertize username 'face 'font-lock-function-name-face)
                            (propertize url 'face 'font-lock-variable-name-face)
-                           description
-                           (propertize has-otp 'face 'font-lock-warning-face)
+                           note
+                           (propertize (if has-otp "Yes" "No")  'face 'font-lock-warning-face)
                            )))
     item-str))
 
-(defun keepass-select ()
+(cl-defun keepass-select ()
   "Select entry based on completing-read."
   (interactive)
+  (unless keepass~all-entries
+    (cl-return-from keepass-select))
   (let* ((objects nil))
     (dolist (entry keepass~all-entries)
       (let* (
@@ -362,7 +375,7 @@ debuggable (backtrace) error."
              (username (truncate-string-to-width username 20 0 ?\s t))
              (url (keepass-entry-url entry))
              (url (truncate-string-to-width url 20 0 ?\s t))
-             (description (keepass-entry-description entry))
+             (note (keepass-entry-note entry))
              (item-str (format "%-20s\t%-20s\t%-20s\t%s"
                                (propertize title 'face 'font-lock-type-face)
                                ;; title
@@ -370,7 +383,7 @@ debuggable (backtrace) error."
                                ;; username
                                ;; url
                                (propertize url 'face 'font-lock-variable-name-face)
-                               description)))
+                               note)))
         (put-text-property 0 (length item-str) 'id id item-str)
         (push item-str objects)))
     (let* ((chosen-id (get-text-property 0 'id
@@ -380,10 +393,12 @@ debuggable (backtrace) error."
       (keepass-update-hydra-hint)
       (keepass~main-redraw-buffer))))
 
-(defun keepass-select-by-title (selected-title)
+(cl-defun keepass-select-by-title (selected-title)
   "Select entry based on its title.
 If there are two entries sharing the same title, the first one is returned."
   (interactive)
+  (unless keepass~all-entries
+    (cl-return-from keepass-select-by-title))
   (let* ((objects nil))
     (dolist (entry keepass~all-entries)
       (let* (
@@ -391,7 +406,7 @@ If there are two entries sharing the same title, the first one is returned."
              (title (keepass-entry-title entry))
              (username (keepass-entry-username entry))
              (url (keepass-entry-url entry))
-             (description (keepass-entry-description entry)))
+             (note (keepass-entry-note entry)))
         (when (string-equal selected-title title)
           (setq keepass-current-selected-id id)
           (setq keepass-current-selected (gethash id keepass~entry-map))

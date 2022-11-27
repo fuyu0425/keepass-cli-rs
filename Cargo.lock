@@ -755,6 +755,7 @@ dependencies = [
  "shadow-rs",
  "shellwords",
  "tracing",
+ "tracing-core",
  "tracing-subscriber",
  "url",
 ]
