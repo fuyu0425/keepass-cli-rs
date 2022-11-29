@@ -427,6 +427,7 @@ impl<'a, 'b> KPClient<'a> {
     }
     pub fn reload(&mut self) {
         let mut id = 0;
+        self.id_map.clear();
         for node in &self.db_manager.db.root {
             match node {
                 NodeRef::Group(g) => {
