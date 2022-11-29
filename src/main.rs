@@ -293,22 +293,6 @@ impl TryFrom<&Entry> for Response {
     }
 }
 
-fn field_name_map(name: &str) -> &str {
-    if name == "title" {
-        "Title"
-    } else if name == "username" {
-        "UserName"
-    } else if name == "url" {
-        "URL"
-    } else if name == "notes" {
-        "Notes"
-    } else if name == "password" {
-        "Password"
-    } else {
-        name
-    }
-}
-
 fn has_otp(e: &Entry) -> Result<bool> {
     let mut ret = false;
     if let Some(v) = e.get("otp") {
@@ -333,91 +317,6 @@ fn otp_seed_to_secret(otp_seed: &str) -> Result<String> {
         .collect::<Vec<&str>>()
         .join("");
     Ok(secret.to_string())
-}
-
-fn print_otp(e: &Entry) -> Result<Vec<String>> {
-    // NOTE: there are two types of otp secret in the database
-    // one is in the url (e.g. otpauth://....)
-    // another one is in the attribute "TOTP Seed"
-    let mut ret: Vec<String> = vec![];
-    if let Some(v) = e.get("otp") {
-        let otp_url = v;
-        let secret = otp_url_to_secret(otp_url)?;
-        let code = TOTPBuilder::new()
-            .base32_key(&secret)
-            .finalize()
-            .unwrap()
-            .generate();
-        debug!("otp: {v} {secret} {code}");
-        ret.push(format!("\"{}\"", code));
-    } else if let Some(v) = e.get("TOTP Seed") {
-        // NOTE: some secret are space separted
-        // let clean: &str = &v.split_ascii_whitespace().collect::<Vec<&str>>().join("");
-        let secret = otp_seed_to_secret(v)?;
-        let code = TOTPBuilder::new()
-            .base32_key(&secret)
-            .finalize()
-            .unwrap()
-            .generate();
-        ret.push(format!("\"{}\"", code));
-    } else {
-        ret.push("\"None\"".to_string());
-    }
-    Ok(ret)
-}
-
-fn print_field(e: &Entry, field: &String) -> Result<Vec<String>> {
-    let mut ret: Vec<String> = vec![];
-    let ff = field_name_map(field.as_str());
-    if ff == "otp" {
-        ret.append(&mut print_otp(e)?);
-        return Ok(ret);
-    } else if ff == "has-otp" {
-        let has = has_otp(&e)?;
-        if has {
-            ret.push("\"yes\"".to_string())
-        } else {
-            ret.push("\"no\"".to_string())
-        }
-        return Ok(ret);
-    }
-    let val = e.get(ff);
-    debug!("{:#?} {:#?}", field, val);
-    if let Some(v) = val {
-        ret.push(format!("\"{}\"", v.to_string()));
-        // ret.push(v.to_string());
-    } else {
-        ret.push("\"None\"".to_string());
-    }
-    Ok(ret)
-}
-
-fn print_entry(e: &Entry, fields: &Option<Vec<String>>, id: Option<u64>) -> Result<Vec<String>> {
-    let mut ret: Vec<String> = vec![];
-    debug!("{:#?}", &e);
-    ret.push("(".to_string());
-    if let Some(id) = id {
-        ret.push(id.to_string());
-    }
-
-    if let Some(fs) = fields.as_ref() {
-        for f in fs.iter() {
-            ret.append(&mut print_field(e, f)?);
-        }
-    } else {
-        let title = e.get_title().unwrap();
-        let user = e.get_username().unwrap();
-        let pass = e.get_password().unwrap();
-        print!("Entry '{0}': '{1}' : '{2}'", title, user, pass);
-    };
-    ret.push(")".to_string());
-    Ok(ret)
-}
-
-fn print_with_cookie(s: &String) {
-    // NOTE: newline is already in s
-    let len = s.len();
-    print!("{}{:x}{}{}", COOKIE_PRE, len, COOKIE_POST, s);
 }
 
 impl<'a, 'b> KPClient<'a> {
