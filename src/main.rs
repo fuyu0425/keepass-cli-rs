@@ -422,24 +422,25 @@ fn print_with_cookie(s: &String) {
 
 impl<'a, 'b> KPClient<'a> {
     pub fn new(db_manager: &'a mut DatabaseManager) -> Result<Self> {
-        db_manager.reload();
         let mut id_map = BTreeMap::new();
+        Ok(Self { db_manager, id_map })
+    }
+    pub fn reload(&mut self) {
         let mut id = 0;
-        for node in &db_manager.db.root {
+        for node in &self.db_manager.db.root {
             match node {
                 NodeRef::Group(g) => {
                     debug!("Saw group '{0}'", g.name);
                 }
                 NodeRef::Entry(e) => {
                     debug!("{:#?}", &e);
-                    id_map.insert(id, e);
+                    self.id_map.insert(id, e);
                     id += 1;
                 }
             };
         }
-        Ok(Self { db_manager, id_map })
     }
-    pub fn reload(&'a mut self) {}
+
     pub fn do_list(
         &'a self,
         fields: &Option<Vec<String>>,
@@ -549,13 +550,17 @@ fn main() -> Result<()> {
     // let password = password.as_str();
     // debug!("passowrd {:#?}", password);
 
-    // let db = Database::open(&mut File::open(path)?, Some(password), None)?;
     let mut db_manager = DatabaseManager::new(path, password)?;
+    db_manager.reload();
     let mut kp_client = KPClient::new(&mut db_manager)?;
 
     match &args.action {
-        Action::List { fields } => kp_client.do_list(fields, args.show, args.copy, args.message)?,
+        Action::List { fields } => {
+            kp_client.reload();
+            kp_client.do_list(fields, args.show, args.copy, args.message)?
+        }
         Action::Get { id, fields } => {
+            kp_client.reload();
             kp_client.do_get(*id, fields, args.show, args.copy, args.message)?
         }
 
@@ -568,6 +573,7 @@ fn main() -> Result<()> {
                     reload = false;
                 }
                 let mut kp_client = KPClient::new(&mut db_manager)?;
+                kp_client.reload();
                 loop {
                     let readline = rl.readline(if !&args.emacs { ">> " } else { "" });
                     match readline {
