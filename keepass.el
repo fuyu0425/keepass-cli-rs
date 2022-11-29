@@ -312,10 +312,15 @@ debuggable (backtrace) error."
     (when copy
       (kill-new val))))
 
-;; TODO: call server to reload database
+
+(defun keepass--reload ()
+  (interactive)
+  (keepass~call "reload"))
+
 (defun keepass-refresh ()
   "Refresh the entries."
   (interactive)
+  (keepass--reload)
   (setq keepass~all-entries nil)
   (clrhash keepass~entry-map)
   (keepass-list))
@@ -360,7 +365,7 @@ debuggable (backtrace) error."
                            )))
     item-str))
 
-(cl-defun keepass-select ()
+(cl-defun keepass-select (&optional init-value)
   "Select entry based on completing-read."
   (interactive)
   (unless keepass~all-entries
@@ -388,7 +393,7 @@ debuggable (backtrace) error."
         (put-text-property 0 (length item-str) 'id id item-str)
         (push item-str objects)))
     (let* ((chosen-id (get-text-property 0 'id
-                                         (completing-read "Select: " objects))))
+                                         (completing-read "Select: " objects nil t init-value))))
       (setq keepass-current-selected-id chosen-id)
       (setq keepass-current-selected (gethash chosen-id keepass~entry-map))
       (keepass-update-hydra-hint)

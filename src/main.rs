@@ -77,6 +77,9 @@ enum Action {
     /// server mode
     #[clap(alias = "s")]
     Server,
+    /// reload database
+    #[clap(alias = "r")]
+    Reload,
     /// quit server
     #[clap(alias = "q")]
     Quit,
@@ -84,7 +87,7 @@ enum Action {
 
 #[derive(Debug)]
 pub struct KPClient<'a> {
-    db: &'a Database,
+    db_manager: &'a DatabaseManager<'a>,
     id_map: BTreeMap<u64, &'a Entry>,
 }
 
@@ -418,10 +421,11 @@ fn print_with_cookie(s: &String) {
 }
 
 impl<'a, 'b> KPClient<'a> {
-    pub fn new(db: &'a Database) -> Result<Self> {
+    pub fn new(db_manager: &'a mut DatabaseManager) -> Result<Self> {
+        db_manager.reload();
         let mut id_map = BTreeMap::new();
         let mut id = 0;
-        for node in &db.root {
+        for node in &db_manager.db.root {
             match node {
                 NodeRef::Group(g) => {
                     debug!("Saw group '{0}'", g.name);
@@ -433,9 +437,9 @@ impl<'a, 'b> KPClient<'a> {
                 }
             };
         }
-        Ok(Self { db, id_map })
+        Ok(Self { db_manager, id_map })
     }
-
+    pub fn reload(&'a mut self) {}
     pub fn do_list(
         &'a self,
         fields: &Option<Vec<String>>,
@@ -487,6 +491,30 @@ impl<'a, 'b> KPClient<'a> {
     }
 }
 
+#[derive(Debug)]
+pub struct DatabaseManager<'a> {
+    pub path: &'a Path,
+    pub password: String,
+    pub db: Database,
+}
+
+impl<'a> DatabaseManager<'a> {
+    pub fn new(path: &'a Path, password: String) -> Result<Self> {
+        let db = Database::open(&mut File::open(path)?, Some(password.as_str()), None)?;
+        Ok(Self { path, password, db })
+    }
+    pub fn reload(&mut self) -> Result<()> {
+        let new_db = Database::open(
+            &mut File::open(self.path)?,
+            Some(self.password.as_str()),
+            None,
+        )?;
+        debug!("update db!");
+        self.db = new_db;
+        Ok(())
+    }
+}
+
 fn main() -> Result<()> {
     let args = Args::parse();
 
@@ -518,64 +546,78 @@ fn main() -> Result<()> {
         io::stdin().read_line(&mut t);
         t.trim_end().to_string()
     };
-    let password = password.as_str();
+    // let password = password.as_str();
     // debug!("passowrd {:#?}", password);
 
-    let db = Database::open(&mut File::open(path)?, Some(password), None)?;
-    let mut kp_client = KPClient::new(&db)?;
+    // let db = Database::open(&mut File::open(path)?, Some(password), None)?;
+    let mut db_manager = DatabaseManager::new(path, password)?;
+    let mut kp_client = KPClient::new(&mut db_manager)?;
 
     match &args.action {
         Action::List { fields } => kp_client.do_list(fields, args.show, args.copy, args.message)?,
         Action::Get { id, fields } => {
             kp_client.do_get(*id, fields, args.show, args.copy, args.message)?
         }
+
         Action::Server => {
             let mut rl = Editor::<()>::new()?;
+            let mut reload = false;
             loop {
-                let readline = rl.readline(if !&args.emacs { ">> " } else { "" });
-                match readline {
-                    Ok(line) => {
-                        rl.add_history_entry(line.as_str());
-                        let mut _v_args_line: Vec<String> = shellwords::split(&line)?;
-                        debug!("{:#?}", &_v_args_line);
-                        let mut v_args_line = vec![" ".to_string()];
-                        v_args_line.append(&mut _v_args_line);
-                        let args_line = Args::try_parse_from(&v_args_line)?;
-                        debug!("{:#?}", &args_line);
-                        match &args_line.action {
-                            Action::List { fields } => kp_client.do_list(
-                                fields,
-                                args_line.show,
-                                args_line.copy,
-                                args_line.message,
-                            )?,
-                            Action::Get { id, fields } => kp_client.do_get(
-                                *id,
-                                fields,
-                                args_line.show,
-                                args_line.copy,
-                                args_line.message,
-                            )?,
-                            Action::Server => {
-                                println!("cannot call server in server")
+                if reload {
+                    db_manager.reload();
+                    reload = false;
+                }
+                let mut kp_client = KPClient::new(&mut db_manager)?;
+                loop {
+                    let readline = rl.readline(if !&args.emacs { ">> " } else { "" });
+                    match readline {
+                        Ok(line) => {
+                            rl.add_history_entry(line.as_str());
+                            let mut _v_args_line: Vec<String> = shellwords::split(&line)?;
+                            debug!("{:#?}", &_v_args_line);
+                            let mut v_args_line = vec![" ".to_string()];
+                            v_args_line.append(&mut _v_args_line);
+                            let args_line = Args::try_parse_from(&v_args_line)?;
+                            debug!("{:#?}", &args_line);
+                            match &args_line.action {
+                                Action::List { fields } => kp_client.do_list(
+                                    fields,
+                                    args_line.show,
+                                    args_line.copy,
+                                    args_line.message,
+                                )?,
+                                Action::Get { id, fields } => kp_client.do_get(
+                                    *id,
+                                    fields,
+                                    args_line.show,
+                                    args_line.copy,
+                                    args_line.message,
+                                )?,
+                                Action::Reload => {
+                                    reload = true;
+                                    break;
+                                }
+                                Action::Server => {
+                                    println!("cannot call server in server")
+                                }
+                                Action::Quit => {
+                                    return Ok(());
+                                }
+                                _ => todo!(),
                             }
-                            Action::Quit => {
-                                break;
-                            }
-                            _ => todo!(),
                         }
-                    }
-                    Err(ReadlineError::Interrupted) => {
-                        println!("CTRL-C");
-                        break;
-                    }
-                    Err(ReadlineError::Eof) => {
-                        println!("CTRL-D");
-                        break;
-                    }
-                    Err(err) => {
-                        println!("Error: {:?}", err);
-                        break;
+                        Err(ReadlineError::Interrupted) => {
+                            println!("CTRL-C");
+                            return Ok(());
+                        }
+                        Err(ReadlineError::Eof) => {
+                            println!("CTRL-D");
+                            return Ok(());
+                        }
+                        Err(err) => {
+                            println!("Error: {:?}", err);
+                            return Ok(());
+                        }
                     }
                 }
             }
