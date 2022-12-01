@@ -1,6 +1,6 @@
 ;; require imagemagick feature
 (require 's)
-(require 'cl)
+(require 'cl-lib)
 (require 'dash)
 (require 'hydra)
 
