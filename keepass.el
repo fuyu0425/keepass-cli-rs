@@ -1,3 +1,4 @@
+;; require imagemagick feature
 (require 's)
 (require 'cl)
 (require 'dash)
@@ -22,6 +23,11 @@
   '((t :inherit font-lock-type-face :weight bold))
   "Face for title."
   :group 'keepass-faces)
+
+(defcustom keepass-show-icon t
+  "show entry icon"
+  :type 'boolean
+  :group 'keepass)
 
 (defcustom keepass-icon-width 16
   "icon width"
@@ -404,26 +410,19 @@ debuggable (backtrace) error."
   (keepass--get keepass-current-selected-id field show copy))
 
 (defun keepass--format-icon (icon-path)
-  (if icon-path (propertize "<"
-                            'display
-                            `(image
-                              :type imagemagick
-                              :file ,icon-path
-                              ;; :scale 1
-                              :width ,keepass-icon-width
-                              :height ,keepass-icon-height
-                              :format nil
-                              :transform-smoothing t
-                              ;; :relief 1
-                              :ascent center
-                              )
-                            ;; 'rear-nonsticky
-                            ;; '(display)
-                            ;; 'front-sticky
-                            ;; '(read-only)
-                            ;; 'fontified
-                            ;; t
-                            )
+  (if (and keepass-show-icon icon-path)
+      (propertize "<"
+                  'display
+                  `(image
+                    :type imagemagick
+                    :file ,icon-path
+                    ;; :scale 1
+                    :width ,keepass-icon-width
+                    :height ,keepass-icon-height
+                    :format nil
+                    :transform-smoothing t
+                    ;; :relief 1
+                    :ascent center))
     " "))
 
 (defun keepass--format-entry (entry)
@@ -612,6 +611,11 @@ When REFRESH is non nil refresh infos from server."
     (keepass~proc-start))
   (unless keepass~all-entries (keepass-list))
   (keepass-update-hydra-hint)
+
+  (unless (and keepass-show-icon (image-type-available-p 'imagemagick))
+    (message "imagemagick is unavailable; disable icon feature")
+    (setq keepass-show-icon nil))
+
   (unless inplace (keepass~main-view))
   (keepass-hydra/body))
 
