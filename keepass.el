@@ -23,7 +23,17 @@
   "Face for title."
   :group 'keepass-faces)
 
-(cl-defstruct keepass-entry "Keepass Entry without password" id title username url note has-otp)
+(defcustom keepass-icon-width 16
+  "icon width"
+  :type 'number
+  :group 'keepass)
+
+(defcustom keepass-icon-height 16
+  "icon height"
+  :type 'number
+  :group 'keepass)
+
+(cl-defstruct keepass-entry "Keepass Entry without password" id title username url note has-otp icon)
 
 (defvar keepass~all-entries nil "All entries (served as a cache)")
 
@@ -229,7 +239,7 @@ debuggable (backtrace) error."
          (db-pw (password-read
                  (format "Password for %s: " keepass-database)
                  keepass-database))
-         )
+         (args (cons "--icon" args)))
     (keepass-log 'misc "%S" args)
     (setq keepass~all-entries nil)
     (clrhash keepass~entry-map)
@@ -330,7 +340,7 @@ debuggable (backtrace) error."
 (defun keepass-list ()
   "List all entries and cache them in `keepass~all-entries'"
   (interactive)
-  (unless keepass~all-entries (keepass~call "ls -f id title username url note has-otp")))
+  (unless keepass~all-entries (keepass~call "ls -f id title username url note has-otp icon")))
 
 
 (defun keepass--get (id field &optional show copy)
@@ -350,6 +360,29 @@ debuggable (backtrace) error."
   (interactive)
   (keepass--get keepass-current-selected-id field show copy))
 
+(defun keepass--format-icon (icon-path)
+  (if icon-path (propertize "<"
+                        'display
+                           `(image
+                            :type imagemagick
+                            :file ,icon-path
+                            ;; :scale 1
+                            :width ,keepass-icon-width
+                            :height ,keepass-icon-height
+                            :format nil
+                            :transform-smoothing t
+                            ;; :relief 1
+                            :ascent center
+                            )
+                           ;; 'rear-nonsticky
+                           ;; '(display)
+                           ;; 'front-sticky
+                           ;; '(read-only)
+                           ;; 'fontified
+                           ;; t
+                           )
+    " "))
+
 (defun keepass--format-entry (entry)
   (let* (
          (id (keepass-entry-id entry))
@@ -358,10 +391,12 @@ debuggable (backtrace) error."
          (url (keepass-entry-url entry))
          (note (keepass-entry-note entry))
          (has-otp (keepass-entry-has-otp entry))
-         (item-str (format "Title: %s\nUsername: %s\nURL: %s\nNote: %s\nHas-OTP: %s"
+         (icon (keepass-entry-icon entry))
+         (item-str (format "Title: %s\nUsername: %s\nURL: %s%2s\nNote: %s\nHas-OTP: %s"
                            (propertize title 'face 'font-lock-type-face)
                            (propertize username 'face 'font-lock-function-name-face)
                            (propertize url 'face 'font-lock-variable-name-face)
+                           (keepass--format-icon icon)
                            note
                            (propertize (if has-otp "Yes" "No")  'face 'font-lock-warning-face)
                            )))
@@ -384,7 +419,9 @@ debuggable (backtrace) error."
              (url (keepass-entry-url entry))
              (url (truncate-string-to-width url 20 0 ?\s t))
              (note (keepass-entry-note entry))
-             (item-str (format "%-20s\t%-20s\t%-20s\t%s"
+             (icon (keepass-entry-icon entry))
+             (item-str (format "%s %-20s\t%-20s\t%-20s\t%s"
+                               (keepass--format-icon icon)
                                (propertize title 'face 'font-lock-type-face)
                                ;; title
                                (propertize username 'face 'font-lock-function-name-face)

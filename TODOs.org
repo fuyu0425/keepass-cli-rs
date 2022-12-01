@@ -12,6 +12,9 @@ Can be a proxy to call =keepassxc-cli= by the provided password.
 * TODO TOTP generation
 only some types are supported now (SHA1/6-digit code)
 
+* TODO Tag search
+Need to modify =keepass-rs= to decrypt =Tags=
+
 * TODO Emacs integration
 
 ** DONE hydra/transient
@@ -21,7 +24,8 @@ CLOSED: [2022-11-25 Fri 16:03]
 CLOSED: [2022-11-25 Fri 16:03]
 use built-in completing-read
 
-** TODO SVG icon?
+** DONE SVG icon?
+CLOSED: [2022-12-01 Thu 17:14]
 Is it possible to render SVG icons in =completing-read= buffer?
 
 ** TODO Clear kill-ring

@@ -3,28 +3,68 @@
 use anyhow::{anyhow, bail, Result};
 use clap::Parser;
 use clap_verbosity_flag::Verbosity;
+use directories::{BaseDirs, ProjectDirs, UserDirs};
 use is_terminal::IsTerminal;
-use keepass::{Database, Entry, NodeRef};
+use keepass::{Database, Entry, Icon, NodeRef};
 use lexpr::{print, sexp, Value};
 use libreauth::oath::TOTPBuilder;
+use once_cell::sync::OnceCell;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
 use std::char;
 use std::collections::BTreeMap;
+use std::fs;
 use std::fs::File;
 use std::io::Read;
 use std::io::{self, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use tracing::{debug, info};
 use tracing_core::Level;
 use tracing_subscriber::{filter, prelude::*};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+
 use url::Url;
 shadow_rs::shadow!(build);
 
 const COOKIE_PRE: char = 254 as char;
 const COOKIE_POST: char = 255 as char;
+
+/// project directories
+static PROJECT_DIRS: OnceCell<ProjectDirs> = OnceCell::new();
+
+fn get_project_dirs() -> &'static ProjectDirs {
+    &PROJECT_DIRS.get().unwrap()
+}
+
+fn get_data_dir() -> &'static Path {
+    &PROJECT_DIRS.get().unwrap().data_dir()
+}
+
+fn get_custom_icon_dir() -> PathBuf {
+    let data_dir = get_data_dir();
+    let custom_icon_path = data_dir.join("custom_icons");
+    custom_icon_path
+}
+
+fn get_custom_icon_path(uuid: &String) -> PathBuf {
+    let custom_icon_dir = get_custom_icon_dir();
+    let bytes = base64::decode(uuid).unwrap();
+    let new_id = base58::ToBase58::to_base58(bytes.as_slice());
+    custom_icon_dir.join(new_id)
+}
+
+fn get_builtin_icon_dir() -> PathBuf {
+    let data_dir = get_data_dir();
+    let icon_path = data_dir.join("icons");
+    icon_path
+}
+
+fn get_builtin_icon_path(id: u8) -> PathBuf {
+    let builtin_icon_dir = get_builtin_icon_dir();
+    let icon_file = format!("{:02}.{}", id, "svg");
+    builtin_icon_dir.join(icon_file)
+}
 
 #[derive(Parser, Debug, Clone)]
 #[clap(author, version, about)]
@@ -50,6 +90,10 @@ pub struct Args {
     /// keepass database path
     #[clap(long = "database", short = 'd')]
     database: Option<String>,
+
+    /// icons
+    #[clap(long = "icon", short = 'i', default_value = "false", global = true)]
+    icon: bool,
 
     #[clap(flatten)]
     verbose: clap_verbosity_flag::Verbosity,
@@ -140,6 +184,7 @@ pub struct ParsedEntry {
     pub id: u64,
     pub fields: BTreeMap<String, Field>,
     pub has_otp: bool,
+    pub icon: Icon,
 }
 
 impl ParsedEntry {
@@ -154,6 +199,20 @@ impl ParsedEntry {
                     values.push(Value::string(self.get_otp_code()?));
                 } else if field == "has-otp" {
                     values.push(Value::Bool(self.has_otp));
+                } else if field == "icon" {
+                    let value = match &self.icon {
+                        Icon::IconID(id) => {
+                            Value::string(get_builtin_icon_path(*id).display().to_string())
+                        }
+                        Icon::CustomIcon(uuid) => {
+                            Value::string(get_custom_icon_path(uuid).display().to_string())
+                        }
+                        Icon::None => {
+                            // NOTE: 0 as default icon for keepassxc
+                            Value::string(get_builtin_icon_path(0).display().to_string())
+                        }
+                    };
+                    values.push(value);
                 } else {
                     let val = self.fields.get(field);
                     if let Some(v) = val {
@@ -290,9 +349,11 @@ impl TryFrom<&Entry> for ParsedEntry {
                 fields.insert(f.index(), f);
             }
         }
+        let mut icon = e.icon.clone();
         Ok(Self {
             fields,
             has_otp,
+            icon,
             ..Default::default()
         })
     }
@@ -384,6 +445,25 @@ impl<'a, 'b> KPClient<'a> {
         }
     }
 
+    pub fn load_icons(&'a self) -> Result<()> {
+        let custom_icon_path = get_custom_icon_dir();
+        debug!("cicon {custom_icon_path:#?}");
+        fs::create_dir_all(&custom_icon_path)?;
+        for (uuid, icon_data) in self.db_manager.db.meta.custom_icons.iter() {
+            // uuid is base64, which is not good!
+            // transform it to base58 instead; can also be base62
+            let bytes = base64::decode(uuid).unwrap();
+            let new_id = base58::ToBase58::to_base58(bytes.as_slice());
+            debug!("old {uuid} new {new_id}");
+            let image_path = custom_icon_path.join(&new_id);
+            if !image_path.try_exists()? {
+                let icon_bytes = base64::decode(icon_data).unwrap();
+                fs::write(image_path, icon_bytes);
+            }
+        }
+        Ok(())
+    }
+
     pub fn do_list(
         &'a self,
         fields: &Option<Vec<String>>,
@@ -445,7 +525,7 @@ pub struct DatabaseManager<'a> {
 impl<'a> DatabaseManager<'a> {
     pub fn new(path: &'a Path, password: String) -> Result<Self> {
         let db = Database::open(&mut File::open(path)?, Some(password.as_str()), None)?;
-        debug!("{:#?}", &db);
+        // debug!("{:#?}", &db);
         // std::process::exit(0);
         Ok(Self { path, password, db })
     }
@@ -462,6 +542,10 @@ impl<'a> DatabaseManager<'a> {
 }
 
 fn main() -> Result<()> {
+    if let Some(proj_dirs) = ProjectDirs::from("", "", "keepass-cli") {
+        PROJECT_DIRS.set(proj_dirs).unwrap();
+    }
+
     let args = Args::parse();
 
     let filter = filter::Targets::new()
@@ -498,6 +582,11 @@ fn main() -> Result<()> {
     let mut db_manager = DatabaseManager::new(path, password)?;
     db_manager.reload();
     let mut kp_client = KPClient::new(&db_manager)?;
+
+    if args.icon {
+        kp_client.load_icons();
+        // return Ok(());
+    }
 
     match &args.action {
         Action::List { fields } => {
