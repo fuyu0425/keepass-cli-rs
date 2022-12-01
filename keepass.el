@@ -285,13 +285,14 @@ debuggable (backtrace) error."
 
 (defun keepass~list-callback (sexp)
   (let* ((data (plist-get sexp :data))
+         (field (plist-get sexp :field))
          (show (plist-get sexp :show))
          (copy (plist-get sexp :copy))
          (msg (plist-get sexp :msg))
          (server-msg (plist-get sexp :server-msg)))
     (dolist (entry data)
       (let* ((fields entry)
-             (fields-with-key (-interleave '(:id :title :username :url :note :has-otp) fields))
+             (fields-with-key (-interleave field fields))
              (m (apply 'make-keepass-entry fields-with-key)))
         (push m keepass~all-entries)
         (puthash (keepass-entry-id m) m keepass~entry-map)))
@@ -301,6 +302,7 @@ debuggable (backtrace) error."
 
 (defun keepass~get-callback (sexp)
   (let* ((data (plist-get sexp :data))
+         (field (plist-get sexp :field))
          (show (plist-get sexp :show))
          (copy (plist-get sexp :copy))
          (msg (plist-get sexp :msg))

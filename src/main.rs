@@ -128,6 +128,11 @@ impl Field {
         }
         .to_string()
     }
+
+    /// username => :username
+    pub fn to_sexp_value(&self) -> Value {
+        Value::keyword(self.to_string())
+    }
 }
 
 #[derive(Debug, Default)]
@@ -201,13 +206,24 @@ impl Response {
     pub fn to_sexp_value(&self, fields: &Option<Vec<String>>) -> Result<Value> {
         let mut ret: Value;
         let mut value_entries: Vec<Value> = vec![];
+        let mut field_sexps: Vec<Value> = vec![];
         for entry in self.entries.iter() {
             let vsexp = entry.to_sexp_value(fields)?;
             value_entries.push(vsexp);
         }
+
+        if let Some(fields) = fields.as_ref() {
+            for field in fields.iter() {
+                let fsexp = Value::keyword(field.to_string());
+                field_sexps.push(fsexp);
+            }
+        }
+
         let mut retv: Vec<Value> = vec![];
         retv.push(Value::keyword(self.ty.to_string()));
         retv.push(Value::Bool(true));
+        retv.push(Value::keyword("field"));
+        retv.push(Value::list(field_sexps));
         retv.push(Value::keyword("data"));
         retv.push(Value::list(value_entries));
         retv.push(Value::keyword("show"));
@@ -319,8 +335,34 @@ fn otp_seed_to_secret(otp_seed: &str) -> Result<String> {
     Ok(secret.to_string())
 }
 
+/// A proxy to offical keepassxc-cli which has more power
+/// that can edit databases.
+#[derive(Debug)]
+pub struct KPXCProxy<'a> {
+    pub path: &'a Path,
+    pub password: String,
+}
+
+impl<'a> KPXCProxy<'a> {
+    pub fn new(path: &'a Path, password: String) -> Self {
+        Self { path, password }
+    }
+
+    pub fn edit(&self, e: &Entry) -> Result<()> {
+        // TODO: make the sure the entry name is unique in the database
+        // because official cli still does not support editing based on uuid
+        Ok(())
+    }
+
+    /// generate process arguments to keepassxc-cli
+    pub fn call(&self) -> Result<()> {
+        // pipe password to stdin
+        Ok(())
+    }
+}
+
 impl<'a, 'b> KPClient<'a> {
-    pub fn new(db_manager: &'a mut DatabaseManager) -> Result<Self> {
+    pub fn new(db_manager: &'a DatabaseManager) -> Result<Self> {
         let mut id_map = BTreeMap::new();
         Ok(Self { db_manager, id_map })
     }
@@ -329,6 +371,7 @@ impl<'a, 'b> KPClient<'a> {
         self.id_map.clear();
         for node in &self.db_manager.db.root {
             match node {
+                // FIXME: should call recursively to support nested groups
                 NodeRef::Group(g) => {
                     debug!("Saw group '{0}'", g.name);
                 }
@@ -402,6 +445,8 @@ pub struct DatabaseManager<'a> {
 impl<'a> DatabaseManager<'a> {
     pub fn new(path: &'a Path, password: String) -> Result<Self> {
         let db = Database::open(&mut File::open(path)?, Some(password.as_str()), None)?;
+        debug!("{:#?}", &db);
+        // std::process::exit(0);
         Ok(Self { path, password, db })
     }
     pub fn reload(&mut self) -> Result<()> {
@@ -452,7 +497,7 @@ fn main() -> Result<()> {
 
     let mut db_manager = DatabaseManager::new(path, password)?;
     db_manager.reload();
-    let mut kp_client = KPClient::new(&mut db_manager)?;
+    let mut kp_client = KPClient::new(&db_manager)?;
 
     match &args.action {
         Action::List { fields } => {
@@ -472,7 +517,7 @@ fn main() -> Result<()> {
                     db_manager.reload();
                     reload = false;
                 }
-                let mut kp_client = KPClient::new(&mut db_manager)?;
+                let mut kp_client = KPClient::new(&db_manager)?;
                 kp_client.reload();
                 loop {
                     let readline = rl.readline(if !&args.emacs { ">> " } else { "" });
