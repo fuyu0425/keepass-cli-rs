@@ -11,10 +11,13 @@ description = "Alternative CLI for KeePass with Emacs integration"
 
 [dependencies]
 anyhow = "1.0.66"
+base58 = "0.2.0"
+base64 = "0.13.1"
 clap = { version = "4.0.26", features = ["derive"] }
 clap-verbosity-flag = "2.0.0"
+directories = "4.0.1"
 is-terminal = "0.4.0"
-keepass = { path = "../keepass-rs" }
+keepass = { path = "../libkeepass-rs" }
 lexpr = "0.2.6"
 libreauth = "0.15.0"
 log = "0.4.17"
