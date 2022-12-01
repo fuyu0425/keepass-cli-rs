@@ -28,7 +28,8 @@ use built-in completing-read
 CLOSED: [2022-12-01 Thu 17:14]
 Is it possible to render SVG icons in =completing-read= buffer?
 
-** TODO Clear kill-ring
+** DONE Clear kill-ring
+CLOSED: [2022-12-01 Thu 17:52]
 
 
 * TODO Other editors

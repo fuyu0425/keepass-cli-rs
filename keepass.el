@@ -33,6 +33,16 @@
   :type 'number
   :group 'keepass)
 
+(defcustom keepass-clear-clipboard t
+  "whether clear clipboard"
+  :type 'boolean
+  :group 'keepass)
+
+(defcustom keepass-clear-clipboard-seconds 30
+  "seconds to clear clipboard"
+  :type 'boolean
+  :group 'keepass)
+
 (cl-defstruct keepass-entry "Keepass Entry without password" id title username url note has-otp icon)
 
 (defvar keepass~all-entries nil "All entries (served as a cache)")
@@ -293,6 +303,39 @@ debuggable (backtrace) error."
     (keepass-log 'to-server "%s" cmd)
     (process-send-string keepass~proc-process (concat cmd "\n"))))
 
+(defvar keepass--killed-string nil
+  "last string that have been killed")
+
+(defvar keepass--clear-clipboard-timer nil
+  "timer for clear clipboard")
+
+(cl-defun keepass--clean-clipboard ()
+  "Clear clipboard"
+  ;; NOTE: clear when the newest value is lasted-kill-one
+  (when (and keepass--killed-string
+             (string-equal keepass--killed-string (car kill-ring)))
+    (message "clear clipboard")
+    (kill-new ""))
+  (setq keepass--killed-string nil))
+
+(defun keepass--kill (val)
+  "kill-new wrapper"
+  (kill-new val)
+  (when keepass-clear-clipboard
+    (setq keepass--killed-string val)
+    ;; NOTE: recount 30 seconds
+    (when keepass--clear-clipboard-timer
+      (cancel-timer keepass--clear-clipboard-timer)
+      (setq keepass--clear-clipboard-timer nil))
+    (setq keepass--clear-clipboard-timer
+          (run-with-timer
+           keepass-clear-clipboard-seconds 1
+           `(lambda ()
+              (keepass-log 'misc "clear clipboard")
+              (cancel-timer keepass--clear-clipboard-timer)
+              (setq keepass--clear-clipboard-timer nil)
+              (keepass--clean-clipboard))))))
+
 (defun keepass~list-callback (sexp)
   (let* ((data (plist-get sexp :data))
          (field (plist-get sexp :field))
@@ -322,7 +365,7 @@ debuggable (backtrace) error."
       (when (or msg server-msg)
         (message "%s %s" (or msg "") (or server-msg ""))))
     (when copy
-      (kill-new val))))
+      (keepass--kill val))))
 
 
 (defun keepass--reload ()
@@ -362,25 +405,25 @@ debuggable (backtrace) error."
 
 (defun keepass--format-icon (icon-path)
   (if icon-path (propertize "<"
-                        'display
-                           `(image
-                            :type imagemagick
-                            :file ,icon-path
-                            ;; :scale 1
-                            :width ,keepass-icon-width
-                            :height ,keepass-icon-height
-                            :format nil
-                            :transform-smoothing t
-                            ;; :relief 1
-                            :ascent center
+                            'display
+                            `(image
+                              :type imagemagick
+                              :file ,icon-path
+                              ;; :scale 1
+                              :width ,keepass-icon-width
+                              :height ,keepass-icon-height
+                              :format nil
+                              :transform-smoothing t
+                              ;; :relief 1
+                              :ascent center
+                              )
+                            ;; 'rear-nonsticky
+                            ;; '(display)
+                            ;; 'front-sticky
+                            ;; '(read-only)
+                            ;; 'fontified
+                            ;; t
                             )
-                           ;; 'rear-nonsticky
-                           ;; '(display)
-                           ;; 'front-sticky
-                           ;; '(read-only)
-                           ;; 'fontified
-                           ;; t
-                           )
     " "))
 
 (defun keepass--format-entry (entry)
@@ -459,6 +502,7 @@ If there are two entries sharing the same title, the first one is returned."
           (keepass-update-hydra-hint)
           (keepass~main-redraw-buffer)
           (cl-return))))))
+
 
 ;; main buffer
 (defun keepass~main-view ()
@@ -576,13 +620,5 @@ When REFRESH is non nil refresh infos from server."
   "Lanuch keepass inplace."
   (interactive)
   (keepass t))
-
-;; TODO can we show svg icon for domain?
-
-;; TODO clear keyring
-;; 1. create a timer
-;; 2. queue (time . password), and pop expired item can clear kill ring
-;; 3. destory the timer when queue is empty
-;; (time-convert (current-time) 'integer)
 
 (provide 'keepass)
