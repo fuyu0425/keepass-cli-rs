@@ -46,6 +46,8 @@ The directory path is generate by the following code from [[https://crates.io/cr
   cargo install --path .
 #+end_src
 ** Emacs integration
+Required package: =s=, =dash=, =hydra=
+
 #+begin_src emacs-lisp
   (add-to-list 'load-path "/Users/fuyu0425/project/github/keepass-cli-rs/")
   (require 'keepass)
