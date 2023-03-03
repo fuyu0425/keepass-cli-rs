@@ -17,7 +17,7 @@ clap = { version = "4.0.26", features = ["derive"] }
 clap-verbosity-flag = "2.0.0"
 directories = "4.0.1"
 is-terminal = "0.4.0"
-keepass = { path = "../libkeepass-rs" }
+keepass = { path = "./lib/libkeepass-rs" }
 lexpr = "0.2.6"
 libreauth = "0.15.0"
 log = "0.4.17"
