@@ -49,6 +49,8 @@ There are two functions: =keepass= and =keepass-inplace=.
 [[./screenshots/keepass-inplace.png]]
 **** Select Entries
 [[./screenshots/keepass-select.png]]
+**** Favorite Entries
+[[./screenshots/keepass-favorite.png]]
 
 
 * Contribution
