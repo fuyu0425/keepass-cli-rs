@@ -8,7 +8,7 @@
 * Why New CLI
 - UI/UX of =keepassxc-cli= is not friendly.
   - =keepassxc-cli= can only list the title of entry. However, only showing the title might not be enough in some cases. Even worse, there might be entries with the exact same title.
-- For *every single* operation, you need to type the master password, which is tedious.
+- Need to parse CLI output to get the information we want.
 - Above reasons make it really difficult to develop a good Emacs package to retrieve passwords.
 
 

@@ -607,6 +607,9 @@ fn main() -> Result<()> {
                     reload = false;
                 }
                 let mut kp_client = KPClient::new(&db_manager)?;
+                if args.icon {
+                    kp_client.load_icons();
+                }
                 kp_client.reload();
                 loop {
                     let readline = rl.readline(if !&args.emacs { ">> " } else { "" });

@@ -4,6 +4,11 @@ CLOSED: [2022-11-23 Wed 14:48]
 * DONE Server mode
 CLOSED: [2022-11-23 Wed 14:48]
 
+* TODO handle groups
+
+* TODO handle different types
+credit card especially
+
 * TODO Key file
 
 * TODO modify database
