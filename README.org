@@ -35,6 +35,10 @@ The directory path is generate by the following code from [[https://crates.io/cr
 
 * Goal
 
+* Download
+#+begin_src shell
+  git clone --recursive https://github.com/fuyu0425/keepass-cli-rs
+#+end_src
 
 * Installation
 ** CLI binary
