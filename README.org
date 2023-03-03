@@ -20,6 +20,17 @@
 * Restriction
 - It's read only! Please use official CLI to add/remove/edit entries/download icons.
 
+
+* Note
+The icon data is saved in the project directory, which is different between operating systems.
+
+For example, on macOS, the directory is =~/Library/Application Support/keepass-cli=.
+
+The directory path is generate by the following code from [[https://crates.io/crates/directories][directories]] crate. Please refer it to find your path.
+#+begin_src rust
+  ProjectDirs::from("", "", "keepass-cli")
+#+end_src
+
 * Goal
 
 
