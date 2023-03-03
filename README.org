@@ -16,6 +16,10 @@
 - List the entries with user-specified fields =keepass-cli -d <DATABSE> ls -f title username=
 - Server mode =keepass-cli -d <DATABASE> server --emacs=
 
+
+* Restriction
+- It's read only! Please use official CLI to add/remove/edit entries/download icons.
+
 * Goal
 
 
@@ -39,6 +43,12 @@
 There are two functions: =keepass= and =keepass-inplace=.
 =keepass= will switch to a special buffer =keepass:main=.
 =keepass-inplace= will not.
+
+*** Screenshots for Emacs integration
+**** Interface
+[[./screenshots/keepass-inplace.png]]
+**** Select Entries
+[[./screenshots/keepass-select.png]]
 
 
 * Contribution
